@@ -33,6 +33,7 @@ export function AddressInput({ onSubmit, isLoading, error }: AddressInputProps) 
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const skipNextSearchRef = useRef(false);
 
   // Debounced fetch for autocomplete - non-blocking
   const fetchSuggestions = useCallback(async (query: string) => {
@@ -51,7 +52,7 @@ export function AddressInput({ onSubmit, isLoading, error }: AddressInputProps) 
       );
       const data = await response.json();
       setSuggestions(data.results || []);
-      setShowDropdown(true); // Always show dropdown when we have a query
+      setShowDropdown(true);
       setSelectedIndex(-1);
     } catch (err) {
       // Ignore abort errors
@@ -63,13 +64,19 @@ export function AddressInput({ onSubmit, isLoading, error }: AddressInputProps) 
   }, []);
 
   useEffect(() => {
+    // Skip search if we just selected an address (prevents race condition)
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false;
+      return;
+    }
+
     if (inputValue.length < 3) {
       setSuggestions([]);
       setShowDropdown(false);
       return;
     }
 
-    // If user selected an address, don't search again
+    // If user has a selected address that matches input, don't search
     if (selectedAddress && inputValue === selectedAddress.address) {
       return;
     }
@@ -104,10 +111,17 @@ export function AddressInput({ onSubmit, isLoading, error }: AddressInputProps) 
   };
 
   const handleSelectSuggestion = (suggestion: AutocompleteResult) => {
+    // Cancel any pending request and skip next search effect
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    skipNextSearchRef.current = true;
+
     setInputValue(suggestion.address);
     setSelectedAddress(suggestion);
     setSuggestions([]);
     setShowDropdown(false);
+    setIsLoadingSuggestions(false);
     inputRef.current?.focus();
   };
 
@@ -200,8 +214,8 @@ export function AddressInput({ onSubmit, isLoading, error }: AddressInputProps) 
                 </div>
               )}
 
-              {/* Dropdown */}
-              {showDropdown && (
+              {/* Dropdown - hide if we have a verified selection */}
+              {showDropdown && !(selectedAddress && inputValue === selectedAddress.address) && (
                 <div
                   ref={dropdownRef}
                   className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto"
