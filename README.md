@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CivicSnap
+
+**GIS-grounded infographics with AI-assisted presentation**
+
+CivicSnap generates template-based, GIS-backed one-page briefs (infographics/exhibits) from an address or APN. It queries public ArcGIS REST endpoints to fetch authoritative geometry and attributes, renders map extracts, and uses AI to transform raw GIS output into polished, accessible documents.
+
+## Key Insight
+
+AI handles layout and language transformation, but **never invents facts**. All data comes from authoritative GIS sources, and the system maintains clear provenance through the `InfographicSpec` contract.
+
+## Templates
+
+### 1. Address Snapshot (Counter Handout)
+The "boring but essential" template every planning counter needs. Includes parcel info, jurisdiction, zoning, districts, hazards, and nearby POIs.
+
+### 2. Plain-Language Property Explainer
+The "impossible without AI" template — transforms GIS jargon into human-readable language for homeowners, buyers, and residents.
+
+### 3. Neighbor Notification Exhibit
+Automates a tedious planning workflow — generating notification area maps and counts.
+
+## Tech Stack
+
+- **Frontend:** Next.js 16 with React 19
+- **Styling:** Tailwind CSS
+- **Maps:** MapLibre GL JS
+- **GIS:** Direct queries to public ArcGIS REST endpoints
+- **Geometry:** Turf.js
+- **Export:** html2canvas + jsPDF
+- **AI (Phase 2):** FAL AI (Nano Banana Pro)
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to use the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a `.env.local` file with:
 
-## Learn More
+```
+FAL_API_KEY=your_fal_api_key
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Architecture
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+User Input (address + template + options)
+    ↓
+Geocode (Census Geocoder)
+    ↓
+GIS Queries (ArcGIS REST → parcel, zoning, GP, hazards, districts)
+    ↓
+Build InfographicSpec (structured JSON with all facts + geometries)
+    ↓
+Render (deterministic HTML/CSS or AI-styled output)
+    ↓
+Export (PNG / PDF)
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Data Sources
 
-## Deploy on Vercel
+- **Solano County / ReGIS:** Parcels, zoning, general plan, boundaries, districts
+- **FEMA NFHL:** Flood hazard zones
+- **CAL FIRE:** Fire hazard severity zones
+- **Census Geocoder:** Address geocoding
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
