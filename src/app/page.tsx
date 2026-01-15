@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { templates } from '@/lib/templates';
 import { InfographicSpec } from '@/lib/types';
 import { TemplateCard } from '@/components/TemplateCard';
-import { AddressInput } from '@/components/AddressInput';
+import { AddressInput, AddressSelection } from '@/components/AddressInput';
 import { AddressSnapshot } from '@/components/AddressSnapshot';
 import { ExportButtons } from '@/components/ExportButtons';
 
@@ -14,7 +14,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = async (address: string) => {
+  const handleGenerate = async (selection: AddressSelection) => {
     setIsLoading(true);
     setError(null);
     setSpec(null);
@@ -24,9 +24,13 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          address,
+          address: selection.address,
           templateId: selectedTemplate,
           options: {},
+          // Pass lat/lon if available (from autocomplete selection)
+          ...(selection.lat !== undefined && selection.lon !== undefined
+            ? { lat: selection.lat, lon: selection.lon }
+            : {}),
         }),
       });
 
@@ -135,7 +139,7 @@ export default function Home() {
                 error={error}
               />
               <p className="mt-3 text-sm text-gray-500">
-                Try a Solano County address like: 123 Main St, Fairfield, CA 94533
+                Start typing a Solano County address to see suggestions (e.g., &quot;675 Texas&quot;)
               </p>
             </section>
           </div>

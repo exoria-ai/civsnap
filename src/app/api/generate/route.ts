@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { geocodeAddress } from '@/lib/geocode';
 import { queryAllGISData } from '@/lib/gis-queries';
 import { buildInfographicSpec } from '@/lib/spec-builder';
-import { InfographicSpec } from '@/lib/types';
+import { InfographicSpec, GeocodeResult } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { address, templateId, options = {} } = body;
+    const { address, templateId, options = {}, lat, lon } = body;
 
     if (!address || typeof address !== 'string') {
       return NextResponse.json(
@@ -23,14 +23,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 1: Geocode the address
-    const geocodeResult = await geocodeAddress(address);
+    let geocodeResult: GeocodeResult;
 
-    if (geocodeResult.matchQuality === 'no_match') {
-      return NextResponse.json(
-        { error: 'Address not found. Please check the address and try again.' },
-        { status: 404 }
-      );
+    // If lat/lon are provided (from autocomplete), skip geocoding
+    if (typeof lat === 'number' && typeof lon === 'number') {
+      geocodeResult = {
+        lat,
+        lon,
+        standardizedAddress: address,
+        matchQuality: 'exact',
+      };
+    } else {
+      // Step 1: Geocode the address
+      geocodeResult = await geocodeAddress(address);
+
+      if (geocodeResult.matchQuality === 'no_match') {
+        return NextResponse.json(
+          { error: 'Address not found. Please check the address and try again.' },
+          { status: 404 }
+        );
+      }
     }
 
     // Step 2: Query GIS data (pass address for better address point matching)
