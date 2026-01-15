@@ -98,6 +98,10 @@ export type ParcelData = {
   address?: string;
   acreage?: number;
   sqft?: number;
+  useCode?: string;
+  useDescription?: string;
+  yearBuilt?: number;
+  zoning?: string;
   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
 };
 

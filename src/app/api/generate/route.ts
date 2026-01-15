@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 2: Query GIS data
-    const gisData = await queryAllGISData(geocodeResult.lon, geocodeResult.lat);
+    // Step 2: Query GIS data (pass address for better address point matching)
+    const gisData = await queryAllGISData(geocodeResult.lon, geocodeResult.lat, address);
 
     // Step 3: Build the infographic spec
     const spec: InfographicSpec = buildInfographicSpec({

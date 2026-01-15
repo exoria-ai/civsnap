@@ -4,7 +4,7 @@ import { queryAllGISData } from '@/lib/gis-queries';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { lat, lon } = body;
+    const { lat, lon, address } = body;
 
     if (typeof lat !== 'number' || typeof lon !== 'number') {
       return NextResponse.json(
@@ -13,7 +13,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await queryAllGISData(lon, lat);
+    // address is optional - improves parcel lookup accuracy when provided
+    const result = await queryAllGISData(lon, lat, address);
 
     return NextResponse.json(result);
   } catch (error) {
