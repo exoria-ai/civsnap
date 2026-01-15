@@ -2,6 +2,41 @@
 
 This document describes the GIS layers used by CivicSnap for Solano County property lookups.
 
+---
+
+## Catalog Discovery
+
+### ArcGIS Server Services Directory
+
+The authoritative index of all published services:
+
+```
+Human-friendly: https://solanocountygis.com/server/rest/services
+Machine-friendly: https://solanocountygis.com/server/rest/services?f=pjson
+```
+
+### Portal Content Catalog
+
+For web maps, apps, tile layers, and dashboards:
+
+```
+UI: https://solanocountygis.com/portal/home/search.html?restrict=false&t=content
+API: https://solanocountygis.com/portal/sharing/rest/search?f=json&q=*&num=100&start=1
+```
+
+**Useful search patterns:**
+- Web apps: `q=type:"Web Mapping Application"`
+- Tile layers: `q=type:"Tile Layer"`
+- Feature services: `q=type:"Feature Service"`
+- By publisher: `q=owner:solanoadmin`
+
+**Get service URL from item ID:**
+```
+https://solanocountygis.com/portal/sharing/rest/content/items/{ITEM_ID}?f=pjson
+```
+
+---
+
 ## Layer Summary
 
 | Layer | Source | Lookup Method | Purpose |
@@ -418,3 +453,64 @@ For reference, here's what a typical parcel record contains (APN 0030251020 - So
 - **California State Plane Zone III (EPSG:103004):** Used internally by Solano County
 
 Always specify `inSR: 4326` when querying with WGS84 coordinates to ensure proper conversion.
+
+---
+
+## Additional Layer Sources (Future)
+
+These are high-value APIs that could enhance CivicSnap beyond basic parcel lookups.
+
+### Environmental Risk
+
+| Layer | URL | Purpose |
+|-------|-----|---------|
+| GeoTracker (cleanup sites) | `https://gispublic.waterboards.ca.gov/portalserver/rest/services/Geotracker` | "Is there a cleanup site nearby?" |
+| CalEnviroScreen | `https://services2.arcgis.com/EJBJ6iaHlb2c1Uh1/ArcGIS/rest/services/CalEnviroScreen/FeatureServer` | Environmental burden by tract |
+| EPA Envirofacts | `https://www.epa.gov/enviro/envirofacts-data-service-api` | Regulated facilities |
+
+### Seismic Hazards
+
+| Layer | URL | Purpose |
+|-------|-----|---------|
+| Alquist-Priolo Fault Zones | `https://services2.arcgis.com/zr3KAIbsRSUyARHG/arcgis/rest/services/CGS_Alquist_Priolo_Fault_Zones/FeatureServer/0` | Earthquake fault zones |
+| Liquefaction Zones | `https://services2.arcgis.com/zr3KAIbsRSUyARHG/ArcGIS/rest/services/CGS_Liquefaction_Zones/FeatureServer` | Ground failure risk |
+| Historical Fire Perimeters | `https://services.arcgis.com/jIL9msH9OI208GCb/arcgis/rest/services/California_Fire_Perimeters_1878_2019/FeatureServer` | "Has it burned here before?" |
+
+### Utilities & Service Providers
+
+| Layer | URL | Purpose |
+|-------|-----|---------|
+| Electric Utility Territories | `https://gis.data.ca.gov/datasets/CAEnergy::electric-load-serving-entities-iou-pou/about` | "PG&E vs SMUD?" |
+| Drinking Water Systems | `https://gis.data.ca.gov/datasets/waterboards::california-drinking-water-system-area-boundaries/about` | "Who provides my water?" |
+| PSPS Event Areas | `https://www.arcgis.com/home/item.html?id=1795477be1504882b4d94ac39691735b` | Power shutoff history |
+
+### Real-Time Data
+
+| Layer | URL | Purpose |
+|-------|-----|---------|
+| NWS Alerts | `https://api.weather.gov/alerts` | Weather warnings/watches |
+| 511 Traffic | `https://511.org/open-data/traffic` | Incidents/closures (token required) |
+
+### City GIS Portals
+
+For city-specific zoning and layers:
+
+| City | Portal URL |
+|------|------------|
+| Vacaville | `https://covgis.cityofvacaville.com/externalgis/rest/services/` |
+| Vallejo | `https://portal.cityofvallejo.net/arcgis/rest/services/` |
+| Fairfield | (contact city for access) |
+
+### Fallback Geocoding
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Census Geocoder | `https://geocoding.geo.census.gov/geocoder/Geocoding_Services_API.html` | Address normalization fallback |
+
+---
+
+## Implementation Notes
+
+- Most layers support point-in-polygon queries via `esriSpatialRelIntersects`
+- For each overlay layer, track: `sourceAgency`, `serviceUrl`, `layerId`, `cacheTTL`, `fieldsWanted`
+- Prioritized v1 bundle: **Flood + Fire + Fault/Liquefaction + Utilities + GeoTracker + Tax rate**

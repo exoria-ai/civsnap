@@ -102,6 +102,12 @@ export type ParcelData = {
   useDescription?: string;
   yearBuilt?: number;
   zoning?: string;
+  // District info from parcel attributes
+  schoolDistrict?: string;
+  fireDistrict?: string;
+  waterDistrict?: string;
+  taxAreaCode?: string;
+  taxAreaCity?: string;
   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
 };
 

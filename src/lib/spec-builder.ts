@@ -171,7 +171,7 @@ function getDistrictLabel(type: string): string {
   const labels: Record<string, string> = {
     supervisorial: 'Supervisorial District',
     school: 'School District',
-    fire: 'Fire Service',
+    fire: 'Fire District',
     water: 'Water District',
   };
   return labels[type] || `${type.charAt(0).toUpperCase() + type.slice(1)} District`;
