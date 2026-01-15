@@ -7,12 +7,14 @@ import { TemplateCard } from '@/components/TemplateCard';
 import { AddressInput, AddressSelection } from '@/components/AddressInput';
 import { AddressSnapshot } from '@/components/AddressSnapshot';
 import { ExportButtons } from '@/components/ExportButtons';
+import { DebugPanel } from '@/components/DebugPanel';
 
 export default function Home() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('address-snapshot');
   const [spec, setSpec] = useState<InfographicSpec | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(true); // Debug panel visible by default
 
   const handleGenerate = async (selection: AddressSelection) => {
     setIsLoading(true);
@@ -157,14 +159,29 @@ export default function Home() {
                 </svg>
                 Back to templates
               </button>
-              <ExportButtons
-                onExportPNG={handleExportPNG}
-                onExportPDF={handleExportPDF}
-              />
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setShowDebug(!showDebug)}
+                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                    showDebug
+                      ? 'bg-yellow-500 text-gray-900'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  🐛 Debug {showDebug ? 'ON' : 'OFF'}
+                </button>
+                <ExportButtons
+                  onExportPNG={handleExportPNG}
+                  onExportPDF={handleExportPDF}
+                />
+              </div>
             </div>
 
             {/* Preview */}
             <AddressSnapshot spec={spec} />
+
+            {/* Debug Panel */}
+            {showDebug && <DebugPanel spec={spec} />}
           </div>
         )}
       </main>
