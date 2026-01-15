@@ -295,6 +295,13 @@ async function queryParcel(
   const yearBuilt = typeof attrs.yrbuilt === 'number' && attrs.yrbuilt > 0 ? attrs.yrbuilt : undefined;
   const zoning = attrs.zone1 ? String(attrs.zone1) : undefined;
 
+  // Extract district info from parcel attributes
+  const schoolDistrict = attrs.d_school ? String(attrs.d_school) : undefined;
+  const fireDistrict = attrs.desc_fire ? String(attrs.desc_fire) : undefined;
+  const waterDistrict = attrs.desc_water ? String(attrs.desc_water) : undefined;
+  const taxAreaCode = attrs.tac ? String(attrs.tac) : undefined;
+  const taxAreaCity = attrs.tac_city ? String(attrs.tac_city) : undefined;
+
   return {
     apn,
     address,
@@ -304,6 +311,11 @@ async function queryParcel(
     useDescription,
     yearBuilt,
     zoning,
+    schoolDistrict,
+    fireDistrict,
+    waterDistrict,
+    taxAreaCode,
+    taxAreaCity,
     geometry: feature.geometry?.rings
       ? arcgisRingsToGeoJSON(feature.geometry.rings)
       : { type: 'Polygon', coordinates: [] },
@@ -553,7 +565,7 @@ export async function queryAllGISData(
   addressString?: string
 ): Promise<GISQueryResult> {
   // Run queries in parallel for performance
-  const [parcel, zoning, generalPlan, jurisdiction, floodHazard, fireHazard, districts] =
+  const [parcel, zoning, generalPlan, jurisdiction, floodHazard, fireHazard, spatialDistricts] =
     await Promise.all([
       queryParcel(lon, lat, addressString),
       queryZoning(lon, lat),
@@ -567,6 +579,51 @@ export async function queryAllGISData(
   const hazards: HazardData[] = [];
   if (floodHazard) hazards.push(floodHazard);
   if (fireHazard) hazards.push(fireHazard);
+
+  // Build districts - prioritize parcel data (more reliable names) over spatial queries
+  const districts: DistrictData[] = [];
+
+  // Add school district from parcel data first (has actual school name)
+  if (parcel?.schoolDistrict) {
+    districts.push({
+      type: 'school',
+      name: parcel.schoolDistrict.trim(),
+      source: {
+        title: 'Solano County Parcels',
+        layer: 'Parcels_Public_Aumentum',
+      },
+    });
+  }
+
+  // Add supervisorial district from spatial query (not in parcel data)
+  const supervisorialDistrict = spatialDistricts.find((d) => d.type === 'supervisorial');
+  if (supervisorialDistrict) {
+    districts.push(supervisorialDistrict);
+  }
+
+  // Add fire district from parcel data
+  if (parcel?.fireDistrict && parcel.fireDistrict.trim()) {
+    districts.push({
+      type: 'fire',
+      name: parcel.fireDistrict.trim(),
+      source: {
+        title: 'Solano County Parcels',
+        layer: 'Parcels_Public_Aumentum',
+      },
+    });
+  }
+
+  // Add water district from parcel data
+  if (parcel?.waterDistrict && parcel.waterDistrict.trim()) {
+    districts.push({
+      type: 'water',
+      name: parcel.waterDistrict.trim(),
+      source: {
+        title: 'Solano County Parcels',
+        layer: 'Parcels_Public_Aumentum',
+      },
+    });
+  }
 
   // Use demo nearby points for now
   const nearbyPoints = generateDemoNearbyPoints(lon, lat);

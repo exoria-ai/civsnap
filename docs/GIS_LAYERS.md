@@ -2,6 +2,41 @@
 
 This document describes the GIS layers used by CivicSnap for Solano County property lookups.
 
+---
+
+## Catalog Discovery
+
+### ArcGIS Server Services Directory
+
+The authoritative index of all published services:
+
+```
+Human-friendly: https://solanocountygis.com/server/rest/services
+Machine-friendly: https://solanocountygis.com/server/rest/services?f=pjson
+```
+
+### Portal Content Catalog
+
+For web maps, apps, tile layers, and dashboards:
+
+```
+UI: https://solanocountygis.com/portal/home/search.html?restrict=false&t=content
+API: https://solanocountygis.com/portal/sharing/rest/search?f=json&q=*&num=100&start=1
+```
+
+**Useful search patterns:**
+- Web apps: `q=type:"Web Mapping Application"`
+- Tile layers: `q=type:"Tile Layer"`
+- Feature services: `q=type:"Feature Service"`
+- By publisher: `q=owner:solanoadmin`
+
+**Get service URL from item ID:**
+```
+https://solanocountygis.com/portal/sharing/rest/content/items/{ITEM_ID}?f=pjson
+```
+
+---
+
 ## Layer Summary
 
 | Layer | Source | Lookup Method | Purpose |
@@ -418,3 +453,168 @@ For reference, here's what a typical parcel record contains (APN 0030251020 - So
 - **California State Plane Zone III (EPSG:103004):** Used internally by Solano County
 
 Always specify `inSR: 4326` when querying with WGS84 coordinates to ensure proper conversion.
+
+---
+
+## Additional Solano County Layers
+
+Base URL: `https://services2.arcgis.com/SCn6czzcqKAFwdGU/ArcGIS/rest/services`
+
+### Utilities & Services (High Priority)
+
+| Layer | Service Name | User Question |
+|-------|-------------|---------------|
+| **Garbage Service Areas** | `Garbage_Service_Areas/FeatureServer/0` | "Who picks up my trash?" |
+| **Water Districts** | `Water_Districts/FeatureServer/0` | "Who provides my water?" |
+| **Fire Stations** | `Fire_Stations/FeatureServer/0` | "Nearest fire station?" |
+| **Electrical Substations** | `Electrical_Substations/FeatureServer/0` | Power infrastructure |
+
+### Fire Hazard (Solano Local - High Priority)
+
+| Layer | Service Name | Purpose |
+|-------|-------------|---------|
+| **Fire Hazard Severity Zone** | `FireHazardSeverityZone/FeatureServer/0` | Current local FHSZ |
+| **FHSZ Phase 2 (2025)** | `FireHazardSeverityZone_Phase2_2025/FeatureServer/0` | 2025 reclassifications |
+| **FHSZ Historical (Apr 2024)** | `FireHazardSeverityZone_April2024/FeatureServer/0` | Historical comparison |
+| **CA State Responsibility Area** | `CaliforniaStateResponsibilityArea/FeatureServer/0` | SRA vs LRA |
+| **Fire Response Boundary** | `FireResponse_Boundary/FeatureServer/0` | Fire district response areas |
+
+### City Zoning & General Plans (Critical for Incorporated Areas)
+
+The county zoning layer only covers unincorporated areas. For city properties, use these:
+
+| City | Zoning Layer | General Plan Layer |
+|------|--------------|-------------------|
+| **Benicia** | `Benicia_Zoning/FeatureServer/0` | `Benicia_GP/FeatureServer/0` |
+| **Dixon** | `City_of_Dixon_Zoning/FeatureServer/0` | `Dixon_GP/FeatureServer/0` |
+| **Fairfield** | `City_of_Fairfield_Zoning/FeatureServer/0` | `City_of_Fairfield_General_Plan/FeatureServer/0` |
+| **Rio Vista** | `City_of_Rio_Vista_Zoning/FeatureServer/0` | `City_of_Rio_Vista_General_Plan/FeatureServer/0` |
+| **Suisun City** | `Suisun_City_Zoning/FeatureServer/0` | `Suisun_City_General_Plan/FeatureServer/0` |
+| **Vacaville** | `City_of_Vacaville_Zoning/FeatureServer/0` | `City_of_Vacaville_General_Plan/FeatureServer/0` |
+| **Vallejo** | `Vallejo_Zoning/FeatureServer/0` | `City_of_Vallejo_General_Plan/FeatureServer/0` |
+
+### Flood & Hazards
+
+| Layer | Service Name | Purpose |
+|-------|-------------|---------|
+| **Floodplains** | `Floodplains/FeatureServer/0` | Local flood data |
+| **Hazmat Districts** | `HazmatDistricts/FeatureServer/0` | Hazmat response zones |
+| **CalEnviroScreen** | `CalEnviroScreen/FeatureServer/0` | Environmental burden by tract |
+
+### Political Districts
+
+| Layer | Service Name | Purpose |
+|-------|-------------|---------|
+| **Congressional Districts** | `CA_Congressional_Districts_in_Solano_County_portal/FeatureServer/0` | US Congress |
+| **State Assembly** | `CA_State_Assembly_Districts/FeatureServer/0` | CA Assembly |
+| **State Senate** | `CA_State_Senate_Districts_portal/FeatureServer/0` | CA Senate |
+| **Census Tracts** | `Census_Tracts/FeatureServer/0` | Demographics |
+
+### Infrastructure (Hosted Services)
+
+Base URL: `https://solanocountygis.com/server/rest/services/Hosted`
+
+| Layer | Service Name | Purpose |
+|-------|-------------|---------|
+| **Road Closures** | `Solano_County_Road_Closures_View/FeatureServer/0` | Real-time closures |
+| **Road Restrictions (Points)** | `Road_Restrictions_Point_View_Layer/FeatureServer/0` | Height/weight/length limits |
+| **Road Restrictions (Areas)** | `Road_Restrictions_Area_ViewLayer/FeatureServer/0` | Area restrictions |
+| **Bridges** | `Bridges_View_Layer/FeatureServer/0` | Bridge conditions |
+| **Culverts** | `Culverts_County_of_Solano_(Read_Only)/FeatureServer/0` | Culvert inventory |
+
+### OES Emergency Layers (Real-Time Incidents)
+
+| Layer | Service Name | Purpose |
+|-------|-------------|---------|
+| **Flooding** | `Flooding_OES/FeatureServer/0` | Active flood incidents |
+| **Landslides** | `Landslides_OES/FeatureServer/0` | Active landslide incidents |
+| **Downed Power Lines** | `Downed_Power_Lines_OES/FeatureServer/0` | Power line incidents |
+| **Downed Trees** | `Downed_Trees_OES/FeatureServer/0` | Tree incidents |
+
+### ADU Eligibility (Special Interest)
+
+| Layer | Service Name | Purpose |
+|-------|-------------|---------|
+| **ADU Eligibility Checker** | `ADU_CanYouBuildIt_NearMeSelector/FeatureServer/0` | "Can I build an ADU?" |
+| **Solano Uninc ADU Areas** | `SolanoUninc_ADU_BuildableAreas/FeatureServer/0` | Unincorporated ADU zones |
+
+City-specific ADU layers also available for Benicia, Dixon, Fairfield, Rio Vista, Vacaville, Vallejo.
+
+### Nearby Points of Interest
+
+| Layer | Service Name | Category |
+|-------|-------------|----------|
+| **Schools** | `Schools/FeatureServer/0` | school |
+| **Parks** | `ParksInSolanoCounty/FeatureServer/0` | park |
+| **Transit Stops** | `Public_Transit_Stops/FeatureServer/0` | transit |
+| **Hospitals** | `Hospitals/FeatureServer/0` | hospital |
+| **Libraries** | `Libraries/FeatureServer/0` | library |
+| **Police Stations** | `Police_Stations/FeatureServer/0` | police |
+| **Community Centers** | `Community_Centers/FeatureServer/0` | community |
+
+### Building & Land
+
+| Layer | Service Name | Purpose |
+|-------|-------------|---------|
+| **Building Footprints 2024** | `Building_Footprints_2024/FeatureServer/0` | Building outlines |
+| **Important Farmland 2020** | `Important_Farmland_2020/FeatureServer/0` | Farmland classification |
+| **Conservation Easements** | `ConservationEasement_CCED/FeatureServer/0` | Protected land |
+| **Soils** | `Soils/FeatureServer/0` | Soil types |
+| **Historic Landmarks** | `HistoricLandmarks/FeatureServer/0` | Historic sites |
+
+### Other Districts
+
+| Layer | Service Name | Purpose |
+|-------|-------------|---------|
+| **Cemetery Districts** | `Cemetery_Districts/FeatureServer/0` | Cemetery districts |
+| **Reclamation Districts** | `Reclamation_Districts_LMA_Flood_Protection/FeatureServer/0` | Flood protection |
+| **GSA Boundaries** | `GSA_Boundaries_Solano/FeatureServer/0` | Groundwater sustainability |
+
+---
+
+## State/Federal Layer Sources
+
+### Environmental Risk
+
+| Layer | URL | Purpose |
+|-------|-----|---------|
+| GeoTracker (cleanup sites) | `https://gispublic.waterboards.ca.gov/portalserver/rest/services/Geotracker` | "Is there a cleanup site nearby?" |
+| EPA Envirofacts | `https://www.epa.gov/enviro/envirofacts-data-service-api` | Regulated facilities |
+
+### Seismic Hazards
+
+| Layer | URL | Purpose |
+|-------|-----|---------|
+| Alquist-Priolo Fault Zones | `https://services2.arcgis.com/zr3KAIbsRSUyARHG/arcgis/rest/services/CGS_Alquist_Priolo_Fault_Zones/FeatureServer/0` | Earthquake fault zones |
+| Liquefaction Zones | `https://services2.arcgis.com/zr3KAIbsRSUyARHG/ArcGIS/rest/services/CGS_Liquefaction_Zones/FeatureServer` | Ground failure risk |
+| Historical Fire Perimeters | `https://services.arcgis.com/jIL9msH9OI208GCb/arcgis/rest/services/California_Fire_Perimeters_1878_2019/FeatureServer` | "Has it burned here before?" |
+
+### Statewide Utilities
+
+| Layer | URL | Purpose |
+|-------|-----|---------|
+| Electric Utility Territories | `https://gis.data.ca.gov/datasets/CAEnergy::electric-load-serving-entities-iou-pou/about` | "PG&E vs SMUD?" |
+| CA Drinking Water Systems | `https://gis.data.ca.gov/datasets/waterboards::california-drinking-water-system-area-boundaries/about` | State drinking water boundaries |
+| PSPS Event Areas | `https://www.arcgis.com/home/item.html?id=1795477be1504882b4d94ac39691735b` | Power shutoff history |
+
+### Real-Time Data
+
+| Layer | URL | Purpose |
+|-------|-----|---------|
+| NWS Alerts | `https://api.weather.gov/alerts` | Weather warnings/watches |
+| 511 Traffic | `https://511.org/open-data/traffic` | Incidents/closures (token required) |
+
+### Fallback Geocoding
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Census Geocoder | `https://geocoding.geo.census.gov/geocoder/Geocoding_Services_API.html` | Address normalization fallback |
+
+---
+
+## Implementation Notes
+
+- Most layers support point-in-polygon queries via `esriSpatialRelIntersects`
+- For each overlay layer, track: `sourceAgency`, `serviceUrl`, `layerId`, `cacheTTL`, `fieldsWanted`
+- **Priority v1 bundle:** Flood + Fire (local FHSZ) + City Zoning + Garbage + Water District
+- **Priority v2 bundle:** Political districts + Schools + Parks + Transit + Road closures
