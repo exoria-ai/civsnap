@@ -9,25 +9,34 @@ import {
   NearbyPoint,
 } from './types';
 
-// Solano County ReGIS ArcGIS REST Service endpoints
-// These will need to be verified against actual county services
-const SOLANO_GIS_BASE = 'https://gis.solanocounty.com/arcgis/rest/services';
+// Solano County ArcGIS Online hosted services
+// Verified working endpoints as of Jan 2025
+const SOLANO_GIS_BASE = 'https://services2.arcgis.com/SCn6czzcqKAFwdGU/ArcGIS/rest/services';
 
-// Layer IDs (to be verified)
 const LAYERS = {
-  parcels: `${SOLANO_GIS_BASE}/Parcels/MapServer/0`,
-  zoning: `${SOLANO_GIS_BASE}/Planning/MapServer/0`,
-  generalPlan: `${SOLANO_GIS_BASE}/Planning/MapServer/1`,
-  cities: `${SOLANO_GIS_BASE}/Boundaries/MapServer/0`,
-  supervisorialDistricts: `${SOLANO_GIS_BASE}/Boundaries/MapServer/1`,
-  schoolDistricts: `${SOLANO_GIS_BASE}/Boundaries/MapServer/2`,
+  // Address points - centroids for parcel lookups (has APN + Lat/Long)
+  addressPoints: `${SOLANO_GIS_BASE}/Address_Points/FeatureServer/0`,
+  // Parcel boundaries and attributes
+  parcels: `${SOLANO_GIS_BASE}/Parcels_Public_Aumentum/FeatureServer/0`,
+  // Unincorporated county zoning (cities have separate layers)
+  zoning: `${SOLANO_GIS_BASE}/SolanoCountyZoning_092322/FeatureServer/4`,
+  // General Plan for unincorporated areas
+  generalPlan: `${SOLANO_GIS_BASE}/SolanoCountyUnincorporated_GeneralPlan2008_updated0923/FeatureServer/0`,
+  // City boundaries (incorporated areas)
+  cities: `${SOLANO_GIS_BASE}/CityBoundary/FeatureServer/2`,
+  // Board of Supervisors districts
+  supervisorialDistricts: `${SOLANO_GIS_BASE}/BOS_District_Boundaries_2021/FeatureServer/0`,
+  // School districts - using community college districts as proxy
+  schoolDistricts: `${SOLANO_GIS_BASE}/CommunityCollegeDistricts_2022/FeatureServer/0`,
 };
 
-// FEMA Flood Hazard Layer
-const FEMA_FLOOD_URL = 'https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28';
+// FEMA National Flood Hazard Layer - Flood Hazard Zones
+const FEMA_FLOOD_URL = 'https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28';
 
-// CAL FIRE Fire Hazard Severity Zones
-const CALFIRE_FHSZ_URL = 'https://egis.fire.ca.gov/arcgis/rest/services/FHSZ/SRA_LRA/MapServer/0';
+// CAL FIRE Fire Hazard Severity Zones (State Responsibility Area)
+const CALFIRE_FHSZ_SRA_URL = 'https://services.gis.ca.gov/arcgis/rest/services/Environment/Fire_Severity_Zones/MapServer/0';
+// CAL FIRE Fire Hazard Severity Zones (Local Responsibility Area)
+const CALFIRE_FHSZ_LRA_URL = 'https://services.gis.ca.gov/arcgis/rest/services/Environment/Fire_Severity_Zones/MapServer/1';
 
 type ArcGISFeature = {
   attributes: Record<string, unknown>;
@@ -55,6 +64,7 @@ async function queryArcGISPoint(
   const params = new URLSearchParams({
     geometry: JSON.stringify({ x: lon, y: lat }),
     geometryType: 'esriGeometryPoint',
+    inSR: '4326', // Input coordinates are WGS84
     spatialRel: 'esriSpatialRelIntersects',
     outFields,
     returnGeometry: 'true',
@@ -95,19 +105,205 @@ function arcgisRingsToGeoJSON(rings: number[][][]): GeoJSON.Polygon | GeoJSON.Mu
   };
 }
 
-async function queryParcel(lon: number, lat: number): Promise<ParcelData | undefined> {
-  const features = await queryArcGISPoint(LAYERS.parcels, lon, lat);
+// Query address point by address string or spatial location
+// Returns APN and precise centroid coordinates
+// First tries address string search (more accurate), then falls back to spatial
+async function queryAddressPoint(
+  lon: number,
+  lat: number,
+  addressString?: string
+): Promise<{ apn: string; lon: number; lat: number; address: string } | undefined> {
+  // First try: search by address string if provided
+  if (addressString) {
+    const addressResult = await searchAddressPointByString(addressString);
+    if (addressResult) return addressResult;
+  }
 
-  if (features.length === 0) return undefined;
+  // Fallback: spatial search near geocoded coordinates
+  return searchAddressPointSpatial(lon, lat);
+}
 
-  const feature = features[0];
+// Search Address Points by address string (e.g., "675 Texas St")
+async function searchAddressPointByString(
+  addressString: string
+): Promise<{ apn: string; lon: number; lat: number; address: string } | undefined> {
+  // Extract street number and name from address
+  // Pattern: "675 Texas Street, Suite 4700, Fairfield, CA" -> number=675, street=TEXAS
+  const match = addressString.match(/^(\d+)\s+([A-Za-z]+)/);
+  if (!match) return undefined;
+
+  const streetNumber = match[1];
+  const streetName = match[2].toUpperCase();
+
+  // Query for addresses matching the street number and name
+  const whereClause = `fulladdress LIKE '${streetNumber} ${streetName}%' OR fulladdress LIKE '${streetNumber} W ${streetName}%' OR fulladdress LIKE '${streetNumber} E ${streetName}%' OR fulladdress LIKE '${streetNumber} N ${streetName}%' OR fulladdress LIKE '${streetNumber} S ${streetName}%'`;
+
+  const params = new URLSearchParams({
+    where: whereClause,
+    outFields: 'apn,fulladdress,lat,long',
+    returnGeometry: 'false',
+    f: 'json',
+    resultRecordCount: '10',
+  });
+
+  try {
+    const response = await fetch(`${LAYERS.addressPoints}/query?${params}`);
+    if (!response.ok) return undefined;
+
+    const data: ArcGISQueryResponse = await response.json();
+    if (data.error || !data.features?.length) return undefined;
+
+    // Return the first match (most likely the exact address)
+    const attrs = data.features[0].attributes;
+    return {
+      apn: String(attrs.apn || ''),
+      lon: Number(attrs.long),
+      lat: Number(attrs.lat),
+      address: String(attrs.fulladdress || ''),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+// Spatial search for nearest address point within ~100m buffer
+async function searchAddressPointSpatial(
+  lon: number,
+  lat: number
+): Promise<{ apn: string; lon: number; lat: number; address: string } | undefined> {
+  const bufferDegrees = 0.001; // ~100m at this latitude
+  const envelope = {
+    xmin: lon - bufferDegrees,
+    ymin: lat - bufferDegrees,
+    xmax: lon + bufferDegrees,
+    ymax: lat + bufferDegrees,
+  };
+
+  const params = new URLSearchParams({
+    geometry: JSON.stringify(envelope),
+    geometryType: 'esriGeometryEnvelope',
+    inSR: '4326',
+    spatialRel: 'esriSpatialRelIntersects',
+    outFields: 'apn,fulladdress,lat,long',
+    returnGeometry: 'false',
+    f: 'json',
+  });
+
+  try {
+    const response = await fetch(`${LAYERS.addressPoints}/query?${params}`);
+    if (!response.ok) return undefined;
+
+    const data: ArcGISQueryResponse = await response.json();
+    if (data.error || !data.features?.length) return undefined;
+
+    // Find the closest address point to our input coordinates
+    let closest = data.features[0];
+    let minDist = Infinity;
+
+    for (const feature of data.features) {
+      const attrs = feature.attributes;
+      const ptLon = Number(attrs.long);
+      const ptLat = Number(attrs.lat);
+      const dist = Math.sqrt(Math.pow(ptLon - lon, 2) + Math.pow(ptLat - lat, 2));
+      if (dist < minDist) {
+        minDist = dist;
+        closest = feature;
+      }
+    }
+
+    const attrs = closest.attributes;
+    return {
+      apn: String(attrs.apn || ''),
+      lon: Number(attrs.long),
+      lat: Number(attrs.lat),
+      address: String(attrs.fulladdress || ''),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+// Query parcel by APN (attribute query - faster and more reliable than spatial)
+async function queryParcelByAPN(apn: string): Promise<ArcGISFeature | undefined> {
+  const params = new URLSearchParams({
+    where: `parcelid = '${apn}'`,
+    outFields: '*',
+    returnGeometry: 'true',
+    f: 'json',
+  });
+
+  try {
+    const response = await fetch(`${LAYERS.parcels}/query?${params}`);
+    if (!response.ok) return undefined;
+
+    const data: ArcGISQueryResponse = await response.json();
+    if (data.error || !data.features?.length) return undefined;
+
+    return data.features[0];
+  } catch {
+    return undefined;
+  }
+}
+
+async function queryParcel(
+  lon: number,
+  lat: number,
+  addressString?: string
+): Promise<ParcelData | undefined> {
+  // First try to find address point - by string if provided, else spatially
+  const addressPoint = await queryAddressPoint(lon, lat, addressString);
+
+  let feature: ArcGISFeature | undefined;
+
+  // If we have an APN from address point, query by attribute (preferred)
+  if (addressPoint?.apn) {
+    feature = await queryParcelByAPN(addressPoint.apn);
+  }
+
+  // Fallback to spatial query if no APN or attribute query failed
+  if (!feature) {
+    const queryLon = addressPoint?.lon ?? lon;
+    const queryLat = addressPoint?.lat ?? lat;
+    const features = await queryArcGISPoint(LAYERS.parcels, queryLon, queryLat);
+    if (features.length > 0) {
+      feature = features[0];
+    }
+  }
+
+  if (!feature) return undefined;
+
   const attrs = feature.attributes;
 
+  // Field mappings for Solano County Parcels_Public_Aumentum service
+  const apn = String(attrs.parcelid || attrs.APN || attrs.PARCEL_NUM || 'Unknown');
+  // Use address from address point if available (more specific), else parcel site address
+  const address = addressPoint?.address || (attrs.p_address ? String(attrs.p_address) : undefined);
+
+  // Acreage fields - try multiple variations
+  let acreage: number | undefined;
+  if (typeof attrs.acres === 'number') acreage = attrs.acres;
+  else if (typeof attrs.lotsize === 'number') acreage = attrs.lotsize / 43560;
+  else if (typeof attrs.gis_acre === 'number') acreage = attrs.gis_acre;
+
+  let sqft: number | undefined;
+  if (typeof attrs.lotsize === 'number') sqft = attrs.lotsize;
+  else if (acreage) sqft = Math.round(acreage * 43560);
+
+  // Extract additional useful fields from parcel data
+  const useCode = attrs.usecode ? String(attrs.usecode) : undefined;
+  const useDescription = attrs.use_desc ? String(attrs.use_desc) : undefined;
+  const yearBuilt = typeof attrs.yrbuilt === 'number' && attrs.yrbuilt > 0 ? attrs.yrbuilt : undefined;
+  const zoning = attrs.zone1 ? String(attrs.zone1) : undefined;
+
   return {
-    apn: String(attrs.APN || attrs.PARCEL_NUM || attrs.PARCELID || 'Unknown'),
-    address: attrs.SITUS_ADDR ? String(attrs.SITUS_ADDR) : undefined,
-    acreage: typeof attrs.ACRES === 'number' ? attrs.ACRES : undefined,
-    sqft: typeof attrs.SQFT === 'number' ? attrs.SQFT : undefined,
+    apn,
+    address,
+    acreage,
+    sqft,
+    useCode,
+    useDescription,
+    yearBuilt,
+    zoning,
     geometry: feature.geometry?.rings
       ? arcgisRingsToGeoJSON(feature.geometry.rings)
       : { type: 'Polygon', coordinates: [] },
@@ -121,12 +317,13 @@ async function queryZoning(lon: number, lat: number): Promise<ZoningData | undef
 
   const attrs = features[0].attributes;
 
+  // Field mappings for SolanoCountyZoning_092322 service
   return {
-    code: String(attrs.ZONING || attrs.ZONE_CODE || attrs.ZONE || 'Unknown'),
-    description: String(attrs.ZONE_DESC || attrs.DESCRIPTION || attrs.ZONING_DESC || ''),
+    code: String(attrs.zone_abbr || attrs.zoning || attrs.ZONE_CODE || 'Unknown'),
+    description: String(attrs.zone_name || attrs.zone_desc || attrs.DESCRIPTION || ''),
     source: {
       title: 'Solano County Zoning',
-      layer: 'Planning/MapServer',
+      layer: 'SolanoCountyZoning_092322',
       url: LAYERS.zoning,
     },
   };
@@ -139,12 +336,17 @@ async function queryGeneralPlan(lon: number, lat: number): Promise<GeneralPlanDa
 
   const attrs = features[0].attributes;
 
+  // Field mappings for SolanoCountyUnincorporated_GeneralPlan2008 service
+  // For incorporated areas, gplu will be 'INC'
+  const designation = String(attrs.gplu || attrs.GP_DESIG || attrs.DESIGNATION || 'Unknown');
+  const description = String(attrs.gp_desc || attrs.name || attrs.DESCRIPTION || '');
+
   return {
-    designation: String(attrs.GP_DESIG || attrs.DESIGNATION || attrs.LAND_USE || 'Unknown'),
-    description: String(attrs.DESCRIPTION || attrs.GP_DESC || ''),
+    designation,
+    description,
     source: {
       title: 'Solano County General Plan',
-      layer: 'Planning/MapServer',
+      layer: 'SolanoCountyUnincorporated_GeneralPlan2008',
       url: LAYERS.generalPlan,
     },
   };
@@ -154,8 +356,9 @@ async function queryJurisdiction(lon: number, lat: number): Promise<Jurisdiction
   const features = await queryArcGISPoint(LAYERS.cities, lon, lat);
 
   const isIncorporated = features.length > 0;
+  // Field mapping for CityBoundary service - 'name' is the city name field
   const cityName = isIncorporated
-    ? String(features[0].attributes.NAME || features[0].attributes.CITY_NAME || 'Unknown City')
+    ? String(features[0].attributes.name || features[0].attributes.NAME || 'Unknown City')
     : undefined;
 
   return {
@@ -163,8 +366,8 @@ async function queryJurisdiction(lon: number, lat: number): Promise<Jurisdiction
     city: cityName,
     incorporated: isIncorporated,
     source: {
-      title: 'Solano County Boundaries',
-      layer: 'Boundaries/MapServer',
+      title: 'Solano County City Boundaries',
+      layer: 'CityBoundary',
       url: LAYERS.cities,
     },
   };
@@ -227,7 +430,15 @@ function getFloodZoneDescription(zone: string): string {
 }
 
 async function queryFireHazard(lon: number, lat: number): Promise<HazardData | undefined> {
-  const features = await queryArcGISPoint(CALFIRE_FHSZ_URL, lon, lat);
+  // Query both SRA (State Responsibility Area) and LRA (Local Responsibility Area) layers
+  const [sraFeatures, lraFeatures] = await Promise.all([
+    queryArcGISPoint(CALFIRE_FHSZ_SRA_URL, lon, lat),
+    queryArcGISPoint(CALFIRE_FHSZ_LRA_URL, lon, lat),
+  ]);
+
+  // Use whichever layer returns data (location can only be in one)
+  const features = sraFeatures.length > 0 ? sraFeatures : lraFeatures;
+  const sourceUrl = sraFeatures.length > 0 ? CALFIRE_FHSZ_SRA_URL : CALFIRE_FHSZ_LRA_URL;
 
   if (features.length === 0) {
     return {
@@ -237,20 +448,24 @@ async function queryFireHazard(lon: number, lat: number): Promise<HazardData | u
       description: 'Not in a designated fire hazard severity zone',
       source: {
         title: 'CAL FIRE Fire Hazard Severity Zones',
-        url: CALFIRE_FHSZ_URL,
+        url: CALFIRE_FHSZ_SRA_URL,
       },
     };
   }
 
   const attrs = features[0].attributes;
-  const hazardClass = String(attrs.HAZ_CLASS || attrs.SRA22_2 || 'Unknown');
+  // Field mappings: SRA uses HAZ_CODE/HAZ_CLASS, LRA may use different fields
+  const hazardClass = String(
+    attrs.HAZ_CLASS || attrs.HAZ_CODE || attrs.SRA22_2 || attrs.FHSZ || 'Unknown'
+  );
 
   let severity: HazardData['severity'] = 'moderate';
-  if (hazardClass.toLowerCase().includes('very high') || hazardClass === '3') {
+  const hazardLower = hazardClass.toLowerCase();
+  if (hazardLower.includes('very high') || hazardClass === '3' || hazardClass === 'VHFHSZ') {
     severity = 'very_high';
-  } else if (hazardClass.toLowerCase().includes('high') || hazardClass === '2') {
+  } else if (hazardLower.includes('high') || hazardClass === '2' || hazardClass === 'HFHSZ') {
     severity = 'high';
-  } else if (hazardClass.toLowerCase().includes('moderate') || hazardClass === '1') {
+  } else if (hazardLower.includes('moderate') || hazardClass === '1' || hazardClass === 'MFHSZ') {
     severity = 'moderate';
   }
 
@@ -261,7 +476,7 @@ async function queryFireHazard(lon: number, lat: number): Promise<HazardData | u
     description: `Fire Hazard Severity: ${hazardClass}`,
     source: {
       title: 'CAL FIRE Fire Hazard Severity Zones',
-      url: CALFIRE_FHSZ_URL,
+      url: sourceUrl,
     },
   };
 }
@@ -269,29 +484,31 @@ async function queryFireHazard(lon: number, lat: number): Promise<HazardData | u
 async function queryDistricts(lon: number, lat: number): Promise<DistrictData[]> {
   const districts: DistrictData[] = [];
 
-  // Query supervisorial district
+  // Query supervisorial district - BOS_District_Boundaries_2021 service
   const supFeatures = await queryArcGISPoint(LAYERS.supervisorialDistricts, lon, lat);
   if (supFeatures.length > 0) {
     const attrs = supFeatures[0].attributes;
+    // Field mapping: 'district' is the district number
+    const districtNum = attrs.district || attrs.DISTRICT || attrs.id;
     districts.push({
       type: 'supervisorial',
-      name: String(attrs.DISTRICT || attrs.NAME || attrs.SUP_DIST || 'Unknown'),
+      name: `District ${districtNum}`,
       source: {
-        title: 'Solano County Supervisorial Districts',
+        title: 'Solano County Board of Supervisors Districts',
         url: LAYERS.supervisorialDistricts,
       },
     });
   }
 
-  // Query school district
+  // Query school/college district - CommunityCollegeDistricts_2022 service
   const schoolFeatures = await queryArcGISPoint(LAYERS.schoolDistricts, lon, lat);
   if (schoolFeatures.length > 0) {
     const attrs = schoolFeatures[0].attributes;
     districts.push({
       type: 'school',
-      name: String(attrs.NAME || attrs.DISTRICT || attrs.SCHOOL_DIST || 'Unknown'),
+      name: String(attrs.name || attrs.NAME || attrs.DISTRICT || 'Unknown'),
       source: {
-        title: 'School Districts',
+        title: 'Community College Districts',
         url: LAYERS.schoolDistricts,
       },
     });
@@ -330,11 +547,15 @@ function generateDemoNearbyPoints(lon: number, lat: number): NearbyPoint[] {
   }));
 }
 
-export async function queryAllGISData(lon: number, lat: number): Promise<GISQueryResult> {
+export async function queryAllGISData(
+  lon: number,
+  lat: number,
+  addressString?: string
+): Promise<GISQueryResult> {
   // Run queries in parallel for performance
   const [parcel, zoning, generalPlan, jurisdiction, floodHazard, fireHazard, districts] =
     await Promise.all([
-      queryParcel(lon, lat),
+      queryParcel(lon, lat, addressString),
       queryZoning(lon, lat),
       queryGeneralPlan(lon, lat),
       queryJurisdiction(lon, lat),
