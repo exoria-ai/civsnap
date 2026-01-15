@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 export type AddressSelection = {
   address: string;
@@ -32,8 +32,36 @@ export function AddressInput({ onSubmit, isLoading, error }: AddressInputProps) 
 
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Debounced fetch for autocomplete
+  // Debounced fetch for autocomplete - non-blocking
+  const fetchSuggestions = useCallback(async (query: string) => {
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    abortControllerRef.current = new AbortController();
+
+    setIsLoadingSuggestions(true);
+    try {
+      const response = await fetch(
+        `/api/autocomplete?q=${encodeURIComponent(query)}`,
+        { signal: abortControllerRef.current.signal }
+      );
+      const data = await response.json();
+      setSuggestions(data.results || []);
+      setShowDropdown(true); // Always show dropdown when we have a query
+      setSelectedIndex(-1);
+    } catch (err) {
+      // Ignore abort errors
+      if (err instanceof Error && err.name === 'AbortError') return;
+      console.error('Autocomplete error:', err);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (inputValue.length < 3) {
       setSuggestions([]);
@@ -46,24 +74,12 @@ export function AddressInput({ onSubmit, isLoading, error }: AddressInputProps) 
       return;
     }
 
-    const debounceTimer = setTimeout(async () => {
-      setIsLoadingSuggestions(true);
-      try {
-        const response = await fetch(`/api/autocomplete?q=${encodeURIComponent(inputValue)}`);
-        const data = await response.json();
-        setSuggestions(data.results || []);
-        setShowDropdown(data.results?.length > 0);
-        setSelectedIndex(-1);
-      } catch (err) {
-        console.error('Autocomplete error:', err);
-        setSuggestions([]);
-      } finally {
-        setIsLoadingSuggestions(false);
-      }
-    }, 250);
+    const debounceTimer = setTimeout(() => {
+      fetchSuggestions(inputValue);
+    }, 200);
 
     return () => clearTimeout(debounceTimer);
-  }, [inputValue, selectedAddress]);
+  }, [inputValue, selectedAddress, fetchSuggestions]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -96,22 +112,25 @@ export function AddressInput({ onSubmit, isLoading, error }: AddressInputProps) 
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!showDropdown || suggestions.length === 0) return;
-
     switch (e.key) {
       case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : prev));
+        if (showDropdown && suggestions.length > 0) {
+          e.preventDefault();
+          setSelectedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : prev));
+        }
         break;
       case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        if (showDropdown && suggestions.length > 0) {
+          e.preventDefault();
+          setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        }
         break;
       case 'Enter':
-        if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+        if (showDropdown && selectedIndex >= 0 && selectedIndex < suggestions.length) {
           e.preventDefault();
           handleSelectSuggestion(suggestions[selectedIndex]);
         }
+        // Otherwise, let form submit naturally with current text
         break;
       case 'Escape':
         setShowDropdown(false);
@@ -123,6 +142,9 @@ export function AddressInput({ onSubmit, isLoading, error }: AddressInputProps) 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
+
+    // Close dropdown on submit
+    setShowDropdown(false);
 
     // If we have a selected address with APN/coords, use those
     if (selectedAddress) {
@@ -151,9 +173,9 @@ export function AddressInput({ onSubmit, isLoading, error }: AddressInputProps) 
                 value={inputValue}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
+                onFocus={() => inputValue.length >= 3 && setShowDropdown(true)}
                 placeholder="Start typing an address..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-900 bg-white"
                 disabled={isLoading}
                 autoComplete="off"
               />
@@ -179,11 +201,21 @@ export function AddressInput({ onSubmit, isLoading, error }: AddressInputProps) 
               )}
 
               {/* Dropdown */}
-              {showDropdown && suggestions.length > 0 && (
+              {showDropdown && (
                 <div
                   ref={dropdownRef}
                   className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto"
                 >
+                  {isLoadingSuggestions && suggestions.length === 0 && (
+                    <div className="px-4 py-3 text-gray-500 text-sm">
+                      Searching...
+                    </div>
+                  )}
+                  {!isLoadingSuggestions && suggestions.length === 0 && (
+                    <div className="px-4 py-3 text-gray-500 text-sm">
+                      No matches found. Press Enter to search anyway.
+                    </div>
+                  )}
                   {suggestions.map((suggestion, index) => (
                     <button
                       key={`${suggestion.apn}-${index}`}
