@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { InfographicSpec, Fact } from '@/lib/types';
-import { MapPanel } from './MapPanel';
+import { InteractiveMap } from './InteractiveMap';
 import { InfoCard, HazardCard } from './InfoCard';
 import { NearbyChips } from './NearbyChips';
 
@@ -63,7 +63,7 @@ export function AddressSnapshot({ spec }: AddressSnapshotProps) {
       <div className="flex flex-col lg:flex-row p-6 gap-6">
         {/* Left: Map Panel */}
         <div className="lg:w-[55%]">
-          <MapPanel
+          <InteractiveMap
             center={[spec.inputs.latLon?.[1] || -122.05, spec.inputs.latLon?.[0] || 38.25]}
             parcelGeometry={spec.geometry.subjectParcel?.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon | undefined}
             bufferGeometry={spec.geometry.buffer?.geometry as GeoJSON.Polygon | undefined}

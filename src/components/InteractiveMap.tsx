@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-type MapPanelProps = {
+type InteractiveMapProps = {
   center: [number, number]; // [lon, lat]
   parcelGeometry?: GeoJSON.Polygon | GeoJSON.MultiPolygon;
   bufferGeometry?: GeoJSON.Polygon;
@@ -15,7 +15,12 @@ type MapPanelProps = {
   onMapReady?: (map: maplibregl.Map) => void;
 };
 
-export function MapPanel({
+/**
+ * Interactive map component using MapLibre GL.
+ * Use this when you need pan/zoom interactivity.
+ * For static AI-generated maps, use StaticMapImage instead.
+ */
+export function InteractiveMap({
   center,
   parcelGeometry,
   bufferGeometry,
@@ -24,7 +29,7 @@ export function MapPanel({
   showNorthArrow = true,
   className = '',
   onMapReady,
-}: MapPanelProps) {
+}: InteractiveMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -203,3 +208,6 @@ export function MapPanel({
     </div>
   );
 }
+
+// Legacy alias for backwards compatibility
+export { InteractiveMap as MapPanel };

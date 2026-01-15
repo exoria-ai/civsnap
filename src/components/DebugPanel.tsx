@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { InfographicSpec } from '@/lib/types';
-import { MapPanel } from './MapPanel';
+import { InteractiveMap } from './InteractiveMap';
 
 type DebugPanelProps = {
   spec: InfographicSpec;
@@ -136,7 +136,7 @@ export function DebugPanel({ spec }: DebugPanelProps) {
               <p className="text-gray-400 mb-2">
                 Parcel only (blue fill):
               </p>
-              <MapPanel
+              <InteractiveMap
                 center={[spec.inputs.latLon?.[1] || -122.05, spec.inputs.latLon?.[0] || 38.25]}
                 parcelGeometry={spec.geometry.subjectParcel?.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon | undefined}
                 className="w-full h-[300px] rounded border border-gray-700"
@@ -149,7 +149,7 @@ export function DebugPanel({ spec }: DebugPanelProps) {
               <p className="text-gray-400 mb-2">
                 Buffer only (dashed blue, 500ft):
               </p>
-              <MapPanel
+              <InteractiveMap
                 center={[spec.inputs.latLon?.[1] || -122.05, spec.inputs.latLon?.[0] || 38.25]}
                 bufferGeometry={spec.geometry.buffer?.geometry as GeoJSON.Polygon | undefined}
                 className="w-full h-[300px] rounded border border-gray-700"
@@ -162,7 +162,7 @@ export function DebugPanel({ spec }: DebugPanelProps) {
               <p className="text-gray-400 mb-2">
                 Both parcel + buffer:
               </p>
-              <MapPanel
+              <InteractiveMap
                 center={[spec.inputs.latLon?.[1] || -122.05, spec.inputs.latLon?.[0] || 38.25]}
                 parcelGeometry={spec.geometry.subjectParcel?.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon | undefined}
                 bufferGeometry={spec.geometry.buffer?.geometry as GeoJSON.Polygon | undefined}
